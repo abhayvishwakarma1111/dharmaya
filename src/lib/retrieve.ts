@@ -1,18 +1,14 @@
-import { generateEmbedding } from "./embeddings"
+import OpenAI from "openai"
 
-export async function retrieveVerses(query: string, supabase: any) {
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+})
 
-    const embedding = await generateEmbedding(query)
-
-    const { data, error } = await supabase.rpc("match_verses", {
-        query_embedding: embedding,
-        match_count: 5
+export async function generateEmbedding(text: string) {
+    const response = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: text
     })
 
-    if (error) {
-        console.error(error)
-        return []
-    }
-
-    return data
+    return response.data[0].embedding
 }
