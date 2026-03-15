@@ -1,15 +1,32 @@
 import { NextResponse } from "next/server"
 import OpenAI from "openai"
+import { createClient } from "@supabase/supabase-js"
+import { retrieveVerses } from "@/lib/retrieve"
 
 const client = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
     baseURL: "https://api.groq.com/openai/v1"
 })
 
+const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_ANON_KEY!
+)
+
 export async function POST(req: Request) {
     try {
 
         const { message } = await req.json()
+
+        // Retrieve relevant verses from Supabase
+        const verses = await retrieveVerses(message, supabase)
+
+        const context = verses
+            ?.map(
+                (v: any) =>
+                    `Bhagavad Gita ${v.chapter}.${v.verse}: ${v.text_translation}`
+            )
+            .join("\n")
 
         const completion = await client.chat.completions.create({
             model: "llama-3.3-70b-versatile",
@@ -17,21 +34,19 @@ export async function POST(req: Request) {
                 {
                     role: "system",
                     content: `
-You are Dharmaya, an assistant that helps people with questions about Hindu dharma, rituals, fasting, festivals, and traditions.
+You are Dharmaya, an assistant that helps people with questions about Hindu dharma.
 
 Language Rules:
-- Always respond in the same language style used by the user.
-- If the user writes in English, reply in English.
-- If the user writes in Hindi (Devanagari script), reply in Hindi.
-- If the user writes in Hinglish (Hindi written in English letters), reply in Hinglish.
-- Do not switch languages unless the user does.
+- Reply in the same language style used by the user (English, Hindi, or Hinglish).
 
-Behavior Rules:
-- Explain things clearly and respectfully.
-- Keep answers simple and easy to understand.
-- If explaining religious practices, mention that traditions may vary.
+Answer using the scripture context below whenever relevant.
 
-Never invent scripture references.
+Scripture Context:
+${context}
+
+Rules:
+- Do not invent scripture references.
+- If the context does not contain the answer, say you are unsure.
 `
                 },
                 {
